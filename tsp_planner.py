@@ -91,13 +91,15 @@ if __name__ == '__main__':
         max_seconds = find_max_seconds(sys.argv)
         for filename in sys.argv[1:]:
             if not filename.startswith("-"):
-                planner = Planner(copyfunc=lambda s: s.minimal_clone())
+                planner = Planner(copy_func=lambda s: s.minimal_clone(),
+                                  cost_func=lambda state, step: state.cities[state.at][step[1]])
                 planner.declare_operators(go_to)
                 planner.declare_methods(solve)
                 tsp = tsp_from_file(filename)
-                plans = planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity)
-                for (plan, time) in plans:
+                plans = planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity, disable_branch_bound=False)
+                for (plan, cost, time) in plans:
                     print(plan)
-                for (plan, time) in plans:
-                    print(f"Length: {len(plan)} time: {time}")
+                    print(cost)
+                for (plan, cost, time) in plans:
+                    print(f"Length: {len(plan)} Cost: {cost} Time: {time}")
                 print(len(plans), "total plans generated")
