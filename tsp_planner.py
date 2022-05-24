@@ -49,25 +49,30 @@ def tsp_from_file(filename: str) -> TSPState:
         tsp_type = value_for_key_in("TYPE", contents)
         print("TSP type:", tsp_type)
         if tsp_type == "TSP":
-            tsp = TSPState(value_for_key_in("NAME", contents))
+            name = value_for_key_in("NAME", contents)
             edge_type = value_for_key_in("EDGE_WEIGHT_TYPE", contents)
             print(edge_type)
             if edge_type == "EUC_2D":
-                start = contents.index("NODE_COORD_SECTION") + 1
-                coords = {}
-                for i in range(start, len(contents)):
-                    parts = contents[i].split()
-                    if len(parts) == 3 and all(p for p in parts if p.isdigit()):
-                        node, x, y = parts
-                        if not tsp.at:
-                            tsp.at = node
-                        coords[node] = (float(x), float(y))
-                        tsp.cities[node] = {}
-                for city1, location1 in coords.items():
-                    for city2, location2 in coords.items():
-                        if city1 != city2:
-                            tsp.cities[city1][city2] = euclidean_distance(location1, location2)
-                return tsp
+                return from_euclidean_2d(name, contents)
+
+
+def from_euclidean_2d(name: str, contents: List[str]) -> TSPState:
+    tsp = TSPState(name)
+    start = contents.index("NODE_COORD_SECTION") + 1
+    coords = {}
+    for i in range(start, len(contents)):
+        parts = contents[i].split()
+        if len(parts) == 3 and all(p for p in parts if p.isdigit()):
+            node, x, y = parts
+            if not tsp.at:
+                tsp.at = node
+            coords[node] = (float(x), float(y))
+            tsp.cities[node] = {}
+    for city1, location1 in coords.items():
+        for city2, location2 in coords.items():
+            if city1 != city2:
+                tsp.cities[city1][city2] = euclidean_distance(location1, location2)
+    return tsp
 
 
 def solve(state: TSPState) -> TaskList:
@@ -108,3 +113,4 @@ if __name__ == '__main__':
                 for (plan, cost, time) in plans:
                     print(f"Length: {len(plan)} Cost: {cost} Time: {time}")
                 print(len(plans), "total plans generated")
+                print([(cost, time) for (plan, cost, time) in plans])
