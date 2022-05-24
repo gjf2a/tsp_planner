@@ -39,7 +39,7 @@ def value_for_key_in(key: str, tsp_input_lines: List[str]) -> str:
                 return parts[1]
 
 
-def euclidean_distance(p1: Tuple[float,float], p2: Tuple[float, float]) -> float:
+def euclidean_distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
     return sum((x - y)**2 for (x, y) in zip(p1, p2))**0.5
 
 
