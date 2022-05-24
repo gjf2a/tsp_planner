@@ -85,10 +85,13 @@ def go_to(state: TSPState, target: str):
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        print(f"Usage: python3 {sys.argv[0]} -v:[verbosity] -s:[max seconds] [tsp_problem_file]+")
+        print(f"Usage: python3 {sys.argv[0]} -v:[verbosity] -s:[max seconds] -branch_bound:[enable|disable] -queue:["
+              f"stack|hybrid] [tsp_problem_file]+")
     else:
         verbosity = find_verbosity(sys.argv)
         max_seconds = find_max_seconds(sys.argv)
+        disable_branch_bound = find_tag_value(sys.argv, "branch_bound") == "disable"
+        enable_hybrid_queue = find_tag_value(sys.argv, "queue") == "hybrid"
         for filename in sys.argv[1:]:
             if not filename.startswith("-"):
                 planner = Planner(copy_func=lambda s: s.minimal_clone(),
@@ -96,7 +99,9 @@ if __name__ == '__main__':
                 planner.declare_operators(go_to)
                 planner.declare_methods(solve)
                 tsp = tsp_from_file(filename)
-                plans = planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity, disable_branch_bound=False)
+                plans = planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity,
+                                       enable_hybrid_queue=enable_hybrid_queue,
+                                       disable_branch_bound=disable_branch_bound)
                 for (plan, cost, time) in plans:
                     print(plan)
                     print(cost)
