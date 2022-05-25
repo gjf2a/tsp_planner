@@ -11,6 +11,13 @@ class TSPState(State):
         self.at = None
         self.distance_traveled = 0
 
+    def change_start(self, rotation: int):
+        cities = list(self.cities.keys())
+        self.at = cities[rotation % len(cities)]
+
+    def num_cities(self) -> int:
+        return len(self.cities)
+
     def solved(self) -> bool:
         return set(self.visited) == set(self.cities.keys())
 
@@ -54,6 +61,13 @@ def tsp_from_file(filename: str) -> TSPState:
             print(edge_type)
             if edge_type == "EUC_2D":
                 return from_euclidean_2d(name, contents)
+            elif edge_type == "EXPLICIT":
+                edge_weight_format = value_for_key_in("EDGE_WEIGHT_FORMAT", contents)
+                print(edge_weight_format)
+                if edge_weight_format == 'FULL_MATRIX':
+                    return from_full_matrix(name, contents)
+                elif edge_weight_format == 'UPPER_ROW':
+                    return from_upper_row(name, contents)
 
 
 def from_euclidean_2d(name: str, contents: List[str]) -> TSPState:
@@ -75,6 +89,31 @@ def from_euclidean_2d(name: str, contents: List[str]) -> TSPState:
     return tsp
 
 
+def from_full_matrix(name: str, contents: List[str]) -> TSPState:
+    tsp = TSPState(name)
+    start = contents.index("EDGE_WEIGHT_SECTION") + 1
+    num_cities = int(value_for_key_in("DIMENSION", contents))
+    tsp.at = str(start)
+    for matrix_row in range(num_cities):
+        tsp.cities[str(matrix_row)] = {str(i):float(n) for i, n in enumerate(contents[start + matrix_row].split())}
+    return tsp
+
+
+def from_upper_row(name: str, contents: List[str]) -> TSPState:
+    tsp = TSPState(name)
+    start = contents.index("EDGE_WEIGHT_SECTION") + 1
+    num_cities = int(value_for_key_in("DIMENSION", contents))
+    tsp.at = str(start)
+    tsp.cities = {str(city):{} for city in range(num_cities)}
+    for matrix_row in range(num_cities - 1):
+        city = str(num_cities - matrix_row - 1)
+        for i, edge in enumerate(contents[start + matrix_row].split()):
+            tsp.cities[city][str(i)] = float(edge)
+            tsp.cities[str(i)][city] = float(edge)
+    print(tsp)
+    return tsp
+
+
 def solve(state: TSPState) -> TaskList:
     if state.solved():
         return TaskList(completed=True)
@@ -88,10 +127,23 @@ def go_to(state: TSPState, target: str):
         return state
 
 
+def run_expr(filename, verbosity, max_seconds, disable_branch_bound, enable_hybrid_queue, start):
+    planner = Planner(copy_func=lambda s: s.minimal_clone(),
+                      cost_func=lambda state, step: state.cities[state.at][step[1]])
+    planner.declare_operators(go_to)
+    planner.declare_methods(solve)
+    tsp = tsp_from_file(filename)
+    if start:
+        tsp.change_start(start)
+    return planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity,
+                          enable_hybrid_queue=enable_hybrid_queue,
+                          disable_branch_bound=disable_branch_bound)
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        print(f"Usage: python3 {sys.argv[0]} -v:[verbosity] -s:[max seconds] -branch_bound:[enable|disable] -queue:["
-              f"stack|hybrid] [tsp_problem_file]+")
+        print(f"Usage: python3 {sys.argv[0]} [-v:verbosity] [-s:max seconds] [-branch_bound:enable|disable] [-queue:"
+              f"stack|hybrid] [-rotate:starting city offset] [-expr:all] [tsp_problem_file]+")
     else:
         verbosity = find_verbosity(sys.argv)
         max_seconds = find_max_seconds(sys.argv)
@@ -99,18 +151,24 @@ if __name__ == '__main__':
         enable_hybrid_queue = find_tag_value(sys.argv, "queue") == "hybrid"
         for filename in sys.argv[1:]:
             if not filename.startswith("-"):
-                planner = Planner(copy_func=lambda s: s.minimal_clone(),
-                                  cost_func=lambda state, step: state.cities[state.at][step[1]])
-                planner.declare_operators(go_to)
-                planner.declare_methods(solve)
-                tsp = tsp_from_file(filename)
-                plans = planner.anyhop(tsp, [('solve',)], max_seconds=max_seconds, verbose=verbosity,
-                                       enable_hybrid_queue=enable_hybrid_queue,
-                                       disable_branch_bound=disable_branch_bound)
-                for (plan, cost, time) in plans:
-                    print(plan)
-                    print(cost)
-                for (plan, cost, time) in plans:
-                    print(f"Length: {len(plan)} Cost: {cost} Time: {time}")
-                print(len(plans), "total plans generated")
-                print([(cost, time) for (plan, cost, time) in plans])
+                if find_tag_value(sys.argv, "expr") == "all":
+                    tsp = tsp_from_file(filename)
+                    num_cities = tsp.num_cities()
+                    best_costs = {True: [], False: []}
+                    for start in range(num_cities):
+                        for is_hybrid in best_costs:
+                            plans = run_expr(filename, verbosity, max_seconds, disable_branch_bound, is_hybrid, start)
+                            cost = plans[-1][1] if len(plans) > 0 else None
+                            best_costs[is_hybrid].append(cost)
+                    print(f'dfs_costs = {best_costs[False]}')
+                    print(f'hybrid_costs = {best_costs[True]}')
+                else:
+                    plans = run_expr(filename, verbosity, max_seconds, disable_branch_bound, enable_hybrid_queue,
+                                     find_tag_int(sys.argv, "rotate"))
+                    for (plan, cost, time) in plans:
+                        print(plan)
+                        print(cost)
+                    for (plan, cost, time) in plans:
+                        print(f"Length: {len(plan)} Cost: {cost} Time: {time}")
+                    print(len(plans), "total plans generated")
+                    print([(cost, time) for (plan, cost, time) in plans])
